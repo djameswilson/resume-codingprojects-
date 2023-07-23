@@ -1,0 +1,543 @@
+---
+title: "final"
+author: "James Wilson"
+date: "2023-05-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+"This data set is the game stats and data for every nba game since the 2017-2018 nba season.
+This was my data set of choice due to my desire to do a data analysis on nba offenses to see how the statitics show the trend in the flow of the game. I am going to use things like shooting statitics and game scores to build an understanding on the growth or decline of the game and how it is being played. This will not factor in statiticstics like pace of game or deeper analytics and just use base analytics because i want to get a broad understanding and there are so many factors that go into it. Rule changes and things like the advent of the three pointer all mix together creating a gumbo of change. I will be using statistics like field goal percentage, three point percentage, points scored, free throw percentage to build an underterstanding of how the flow of the game is becoming threw time. Also using stats for home and away teams, I can see how teams are playing in away and home games."  
+
+
+```{r}
+getwd()
+```
+
+## Include the right library files
+attach the needed library files. 
+```{r echo=FALSE}
+library(readxl)
+library(dplyr)
+```
+```{r}
+install.packages("forecast")
+library(forecast)
+library(TTR) #for the WMA function and Holt-Winters function 
+```
+
+
+# Read in Data 
+```{r}
+nba_file <- read.csv("nba_stats.csv")
+View(nba_file)
+```
+
+# Data Overview 
+```{r}
+head(nba_file)
+glimpse(nba_file)
+```
+
+```{r}
+home_file <- select(nba_file, HOME_FG3_PCT, HOME_FT_PCT, HOME_PTS, HOME_FG_PCT)
+```
+
+# Descriptive statistics 
+
+```{r}
+summary(home_file)
+```
+
+```{r}
+away_file <- select(nba_file, AWAY_FG3_PCT, AWAY_FT_PCT, AWAY_PTS, AWAY_FG_PCT)
+```
+
+# Descriptive statistics 
+
+```{r}
+summary(away_file)
+```
+
+
+"These statitics show an overall better performance slightly going to the home team as the home team overall it has better means. This could be due to many different factors but offensive flow is better overall while at home for nba teams." 
+
+
+```{r}
+homePCT_file <- select(nba_file, W_HOME, W_AWAY, HOME_AST, HOME_TOT_REB, HOME_FG3_PCT, HOME_FG_PCT, HOME_FT_PCT)
+```
+
+# Correlation Table 
+```{r}
+c2 <- cor(homePCT_file)
+c2
+```
+
+The following code will pull the lower half
+```{r}
+#install.packages("rstatix")
+library(rstatix)
+lower_corr <- round(c2, 2)
+pull_lower_triangle(lower_corr, diagonal = TRUE)
+```
+
+
+"These two correlation tables show the affect the shooting percentages and passing has on the success of the home team vs the succcess of the Away team. Its has a constant overall negative affect on the success of the away team and shows a strong correllation to a positive affect for the home team. Field goal percenatge of all shots has a much bigger correlation than free throw percantage which shows the lower effect freethrows have on the game. If we isolate this table we can realize that field goal percantage has the greatest affect on the success of teams. We can also realize that 3 point percantage also now has a greater affect on the game than prior years with it coming a close second."
+
+
+"By definition turnovers are simply a team turning over the ball to the opposing team putting them back on offense. Steals are brut force way of causing turnovers. How much effect does steals have on Turnovers?"
+
+
+```{r}
+og <- table(nba_file$HOME_STL, nba_file$AWAY_TURNOVERS)
+
+
+```
+
+# Add Dimensions 
+```{r}
+dimnames(og)
+names(dimnames(og))
+
+names(dimnames(og)) <- c('Home Steal', 'Away Turnover')
+names(dimnames(og))
+og
+
+```
+
+# joint probabilities 
+
+```{r}
+d <- prop.table(og)
+d
+
+```
+
+# Add sub totals 
+```{r}
+library(stats)
+j <- addmargins(og)
+j
+```
+
+# Add sub totals to the proportions 
+```{r}
+k <- addmargins(j)
+k
+
+```
+
+"These tables above  show that the average amount of steals which would 7 steals matches to 14 turnovers. This would mean that the average amount of steals account for half of the average amount of 14 turnovers. This would mean steals have a huge affect turnovers as shown by the tables above with them both trending toward the middle of each column"
+
+
+"3 pointers are shown to be on a drastic rise in the game over time. Assists byfare lead to the highest percentage shots as the pass can set up somone in perfect positiong for a open shot without them having to create their own shot. How does assists affect the ammount of 3 pointers made?"
+
+
+# Basic Table 
+```{r}
+table(nba_file$HOME_AST, nba_file$HOME_FG3)
+
+```
+## Use an object 
+
+```{r}
+go <- table(nba_file$HOME_AST, nba_file$HOME_FG3)
+
+
+```
+
+# Add Dimensions 
+```{r}
+dimnames(go)
+names(dimnames(go))
+
+names(dimnames(go)) <- c('Home Assist', 'Home Field Goal three')
+names(dimnames(go))
+go
+
+```
+
+
+"A Joint probability is the probability that two events will both occur. In layman terms, joint probability is the likelihood of two events occurring together.I will be using this probability to enjoin 3 point field goals to assits to show the liklihood of higher assist games occuring along side higher 3 pointers made games"
+
+# joint probabilities 
+```{r}
+b <- prop.table(go)
+b
+
+```
+
+"marginal Probability is the idea of an event occurring without any outside interference or considering another event, so basically isolating an event and seeing how often it happens. Assists are a big part of basketball, what is the marginal probability of 21 assists game to a 28 assists game"
+
+# Add sub totals 
+```{r}
+library(stats)
+c <- addmargins(go)
+c
+```
+"out of the 7096 games recorded, games with 21-28 assist accounted for 3,587 which is over half the games showing the league shows a trend to 21-28 assist per game."
+# Add sub totals to the proportions 
+```{r}
+a <- addmargins(b)
+a
+
+```
+
+
+"These tables show that assist cause higher percentage shots due to the fact that the more assist equates to 3 point field goals. The table is center down the middle and not skewed so it shows equality and correlation."
+
+
+
+"3 pointers are the lowest percentage shot due to distance. Offensive rebounds are teams rebounding after their own miss. How much affect does 3 pointers attempeted have on a teams offensive rebounds?"
+
+
+# Basic Table 
+```{r}
+table(nba_file$HOME_OFF_REB, nba_file$HOME_FG3A)
+
+```
+## Use an object 
+
+```{r}
+reb <- table(nba_file$HOME_OFF_REB, nba_file$HOME_FG3A)
+
+
+```
+
+# Add Dimensions 
+```{r}
+dimnames(reb)
+names(dimnames(reb))
+
+names(dimnames(reb)) <- c('Home Offensive Rebounds', 'Home Field Goal 3 point attempted')
+names(dimnames(reb))
+reb
+
+```
+
+# Add sub totals 
+```{r}
+library(stats)
+y <- addmargins(reb)
+y
+```
+
+# Add sub totals to the proportions 
+```{r}
+z <- addmargins(y)
+z
+
+```
+
+# Conditional Probabilities 
+What is the probability that teams will have a 10 rebound 15 3's attempted game if they first purchase an 10 rebound 50 3's attempted game ?
+```{r}
+y[11, 40]
+y[11, 15]
+p_mac <- y[11, 15] / y[11, 40]
+p_mac
+```
+
+
+"Three pointers attempted do not have as big of an affect on offensive rebounds as the bigger offensive rebound games are not being yielded from the highest 3 pointers attempeted. It has a possible correlation but not a strong correlation table or at least as strong as orriginally assumed. Teams are having big rebound games without having big 3's attempted games and vice versa."
+
+
+# Split data into training and validation 
+```{r}
+#install.packages("caTools")
+library(caTools)
+
+set.seed(88)
+
+dataSplit = sample.split(nba_file$HOME_FG3_PCT, SplitRatio = 0.75)
+dataSplit
+
+OPTraining = subset(nba_file, dataSplit == TRUE)
+OPValidate = subset(nba_file, dataSplit == FALSE)
+
+View(OPTraining)
+nrow(OPTraining)
+
+```
+
+# Find Outliers 
+## Using Boxplot 
+### Boxplot Graph 
+```{r}
+boxplot(OPTraining$HOME_FG3_PCT, main = "Boxplot of Price for OP Training")
+```
+
+### Display the outliers 
+```{r}
+boxplot.stats(OPTraining$HOME_FG3_PCT)$out
+
+```
+### Exclude the outliers 
+```{r}
+outliers <- boxplot.stats(OPTraining$HOME_FG3_PCT)$out
+
+normalData <- OPTraining[!OPTraining$HOME_FG3_PCT %in% outliers, ]
+
+View(normalData)
+nrow(normalData)
+
+boxplot(normalData$HOME_FG3_PCT)
+
+```
+
+## Using Z value to find outliers 
+We will use Z-value to find the data points with z-value at least 3
+
+### Calculate Z-Value for price
+```{r}
+z_value_price <- (OPTraining$HOME_FG3_PCT - mean(OPTraining$HOME_FG3_PCT))/sd(OPTraining$HOME_FG3_PCT)
+z_value_price
+
+```
+
+### Calculate Z-Value for the data frame 
+```{r}
+z_scores <- OPTraining %>% mutate(z_price = (OPTraining$HOME_FG3_PCT - mean(OPTraining$HOME_FG3_PCT))/sd(OPTraining$HOME_FG3_PCT))
+View(z_scores)
+
+```
+
+### Exclude the outliers 
+```{r}
+clean_data <- z_scores %>% filter(abs(z_price) <= 2) %>% select(HOME_FG3, HOME_FG3A, HOME_FG3_PCT, HOME_PTS)
+
+View(clean_data)
+
+```
+
+## Check for linear trend 
+### Full Dataset
+```{r}
+plot(nba_file$HOME_FG3_PCT, nba_file$HOME_PTS, 
+     main = "FG3 PCT by PTS Full Dataset", 
+     xlab = "HOME_PTS", 
+     ylab = "HOME_FG3_PCT", 
+     pch = 16, 
+     col = "dark blue")
+
+```
+
+### Dataset with no outliers by Boxplot 
+```{r}
+plot(normalData$HOME_FG3_PCT, normalData$HOME_PTS, 
+     main = "FG3_PCT by PTS Boxplot", 
+     xlab = "HOME_PTS", 
+     ylab = "HOME_FG3_PCT", 
+     pch = 16, 
+     col = "dark blue")
+```
+
+### Dataset with no outliers by Z-Value 
+```{r}
+plot(clean_data$HOME_FG3_PCT, clean_data$HOME_PTS, 
+     main = "FG3_PCT by PTS Boxplot", 
+     xlab = "HOME_PTS", 
+     ylab = "HOME_FG3_PCT", 
+     pch = 16, 
+     col = "dark blue")
+
+```
+
+
+
+## Check for normal distribution for the DV
+### Full Dataset 
+```{r}
+hist(nba_file$HOME_FG3_PCT, main = "3 point % Distribution Boxplot", xlab = "3 Point %")
+```
+### Dataset with no outliers by Boxplot 
+```{r}
+hist(normalData$HOME_FG3_PCT, main = "3 point % Distribution Boxplot", xlab = "3 Point %")
+```
+
+### Dataset with no outliers by Z-value
+```{r}
+hist(clean_data$HOME_FG3_PCT, main = "3 point % Distribution Boxplot", xlab = "3 Point %")
+```
+
+```{r}
+#install.packages("Hmisc")
+library(Hmisc)
+```
+
+"Research question: Points in today games are scored in high volume by 3 pointers due to analitics showing 36% from 3 is equal to 50% from 2. My research question is how much of the effect of 3 point % is showed through points scored? Does high point outings equate to higher 3 point %?"
+# Simple Linear Regression 
+DV is 3 Point Field GOAl%. IV is Points. 
+## Simple Linear Model
+### Full Dataset 
+```{r}
+SimpleLinearRegr = lm(HOME_PTS ~ HOME_FG3_PCT, data = nba_file )
+```
+
+### Dataset with no outliers by Boxplot
+```{r}
+SimpleLinearRegr2 = lm(HOME_PTS ~ HOME_FG3_PCT, data = nba_file )
+summary(SimpleLinearRegr2)
+```
+
+### Dataset with no outliers by Z-value 
+```{r}
+SimpleLinearRegr3 = lm(HOME_PTS ~ HOME_FG3_PCT, data = nba_file )
+summary(SimpleLinearRegr3)
+
+```
+
+
+## Check the assumptions for the regression model 
+### Full Dataset
+```{r}
+par(mfrow = c(1,1))
+plot(SimpleLinearRegr)
+
+```
+
+### Dataset with no outliers by Boxplot
+```{r}
+par(mfrow = c(1,1))
+plot(SimpleLinearRegr2)
+
+```
+
+### Dataset with no outliers by Z-Value
+```{r}
+par(mfrow = c(1,1))
+plot(SimpleLinearRegr3)
+
+```
+
+
+
+## Results 
+```{r}
+summary(SimpleLinearRegr)
+```
+"These statistics show that 
+## Display the regression line 
+```{r}
+plot(nba_file$HOME_FG3_PCT, nba_file$HOME_PTS, 
+     main = "FG3% by PTS Boxplot", 
+     xlab = "HOME_FG3%", 
+     ylab = "HOME_PTS", 
+     pch = 16, 
+     col = "dark blue")
+```
+"These statistics show that 3 point % does cause a higher point performance by teams as teams shooting over 40% rarely scored below 90 points and any scores 90 points or lower is all teams shooting below 40% in majority."
+## Make a prediction 
+```{r}
+a <- data.frame(HOME_PTS = 90)
+a
+newHousePrice <- predict(SimpleLinearRegr, a)
+newHousePrice
+
+```
+"this linear regression model shows that the more 3's made by a team directly leads to higher points scored. It shows this through the exponential growth in points with 3 points made. No team that shot iver 40% from three made less than 90 points over a 5 year period."
+# Multiple Linear Regression 
+## Full dataset 
+```{r}
+multipleLinearReg = lm(HOME_PTS ~ HOME_FG3_PCT, data = nba_file )
+
+multipleLinearReg2 = lm(HOME_PTS~HOME_FG3+HOME_AST+HOME_FG3_PCT -1, data = nba_file)
+summary(multipleLinearReg2)
+
+```
+
+## Boxplot Data 
+```{r}
+
+multipleLinearReg3 = lm(HOME_PTS~HOME_FG3+HOME_AST+HOME_FG3_PCT -1, data = normalData)
+summary(multipleLinearReg3)
+```
+
+### Check for multicolinearity 
+```{r}
+#install.packages("regclass")
+library(regclass)
+VIF(multipleLinearReg3)
+
+```
+
+
+## Z-Value Data 
+```{r}
+
+multipleLinearReg4 = lm(HOME_PTS~HOME_FG3+HOME_AST+HOME_FG3_PCT -1, data = nba_file)
+summary(multipleLinearReg4)
+```
+
+
+# Create a Time Series Object
+```{r}
+pommelTS <- ts(nba_file$HOME_FG3, start=2017-2018, frequency = 1)
+```
+
+## Using Autoplot
+```{r}
+autoplot(pommelTS)
+```
+
+# Forecasting Models
+## Simple Moving Average 
+```{r}
+
+pomlMovingAverage <- ma(pommelTS, order = 3)
+pomlMovingAverage
+
+pomlMAForecast <- forecast(pomlMovingAverage, h=3)
+pomlMAForecast
+accuracy(pomlMAForecast)
+plot(pomlMAForecast, main = "Pommel Dscore Forecast", type = "l", 
+     col = "blue")
+```
+
+## Weighted Moving Average 
+```{r}
+z <- c(0.6, 0.3, 0.1)
+n <- WMA(pommelTS, n=3, z)
+help("WMA")
+WeightedForecast <- forecast(n, h = 3)
+WeightedForecast
+accuracy(WeightedForecast)
+
+```
+
+## Exponential Smoothing 
+```{r}
+EXPSmoothing <- ses(pommelTS, alpha = 0.20)
+EXPSmoothingForecast <- forecast(EXPSmoothing, h=3)
+EXPSmoothingForecast
+accuracy(EXPSmoothingForecast)
+
+```
+## Holt-Winters Function
+```{r}
+
+
+#Create a time series 
+nbaTS <- ts(nba_file$HOME_FG3, start = 1, frequency = 12)
+plot(nbaTS)
+
+decomposenbaTS <- decompose(nbaTS)
+plot(decomposenbaTS)
+
+TripleForecast <- HoltWinters(nbaTS, alpha = 0.2, beta = 0.1, gamma = 0.1)
+
+x <- forecast(TripleForecast, h = 3)
+x
+accuracy(x)
+```
+
+"the best forcast was byfar the moving average as it was most close to the recent growths in points and 3 pointers made."
+
+
+
